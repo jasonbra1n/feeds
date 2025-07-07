@@ -95,7 +95,7 @@
         document.getElementById('rss-form').addEventListener('submit', function(event) {
             event.preventDefault();
             const rssUrl = document.getElementById('rss-url').value;
-            const proxyUrl = 'https://cors.bridged.cc';
+            const proxyUrl = 'https://cors.bridged.cc/';
             const targetUrl = proxyUrl + rssUrl;
             const gallery = document.getElementById('gallery');
             gallery.innerHTML = '<p>Loading...</p>';
@@ -128,7 +128,7 @@
         });
 
         function getVideoUrl(link) {
-            const proxyUrl = 'https://cors.bridged.cc';
+            const proxyUrl = 'https://cors.bridged.cc/';
             return fetch(proxyUrl + link)
                 .then(response => {
                     if (!response.ok) return '';
