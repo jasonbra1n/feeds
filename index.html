@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Custom Video Gallery</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 20px;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+        .gallery {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .video-card {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            overflow: hidden;
+            text-align: center;
+            padding: 10px;
+        }
+        .video-card h3 {
+            font-size: 1.1em;
+            margin: 10px 0;
+            color: #333;
+        }
+        .video-card video {
+            width: 100%;
+            height: 200px;
+            border-radius: 5px;
+            display: block;
+        }
+        .video-card a {
+            color: #007bff;
+            text-decoration: none;
+        }
+        .video-card a:hover {
+            text-decoration: underline;
+        }
+        .error {
+            color: red;
+            text-align: center;
+        }
+        .debug {
+            color: #666;
+            font-size: 0.9em;
+            word-wrap: break-word;
+        }
+        .form-container {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .form-container input[type="text"] {
+            width: 70%;
+            padding: 8px;
+            font-size: 1em;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        .form-container button {
+            padding: 8px 16px;
+            font-size: 1em;
+            background-color: #333;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .form-container button:hover {
+            background-color: #555;
+        }
+    </style>
+</head>
+<body>
+    <h1>Custom Video Gallery</h1>
+    <div class="form-container">
+        <form id="rss-form">
+            <input type="text" id="rss-url" placeholder="Enter RSS feed URL" required>
+            <button type="submit">Submit</button>
+        </form>
+    </div>
+    <div id="gallery" class="gallery"></div>
+    <script>
+        document.getElementById('rss-form').addEventListener('submit', function(event) {
+            event.preventDefault();
+            const rssUrl = document.getElementById('rss-url').value;
+            const proxyUrl = 'https://cors-anywhere.herokuapp.com/';
+            const targetUrl = proxyUrl + rssUrl;
+            const gallery = document.getElementById('gallery');
+            gallery.innerHTML = '<p>Loading...</p>';
+
+            fetch(targetUrl)
+                .then(response => {
+                    if (!response.ok) throw new Error('Failed to fetch RSS feed');
+                    return response.text();
+                })
+                .then(str => new DOMParser().parseFromString(str, 'text/xml'))
+                .then(data => {
+                    const items = data.querySelectorAll('item');
+                    if (items.length === 0) throw new Error('No items found in RSS feed');
+                    const videos = Array.from(items).slice(0, 50).map(item => {
+                        const title = item.querySelector('title')?.textContent || 'No Title';
+                        const link = item.querySelector('link')?.textContent || '';
+                        let thumbnail = 'https://via.placeholder.com/250x150';
+                        const thumbElement = item.querySelector('thumb') || 
+                                          item.querySelector('image') || 
+                                          item.getElementsByTagNameNS('http://search.yahoo.com/mrss/', 'thumbnail')[0];
+                        if (thumbElement) thumbnail = thumbElement.textContent || thumbElement.getAttribute('url') || thumbnail;
+                        return { title, link, thumbnail };
+                    });
+                    return Promise.all(videos.map(video => getVideoUrl(video.link).then(url => ({ ...video, videoUrl: url }))));
+                })
+                .then(videos => displayVideos(videos))
+                .catch(error => {
+                    gallery.innerHTML = `<p class="error">Error: ${error.message}</p>`;
+                });
+        });
+
+        function getVideoUrl(link) {
+            const proxyUrl = 'https://cors-anywhere.herokuapp.com/';
+            return fetch(proxyUrl + link)
+                .then(response => {
+                    if (!response.ok) return '';
+                    return response.text();
+                })
+                .then(html => {
+                    const parser = new DOMParser();
+                    const doc = parser.parseFromString(html, 'text/html');
+                    const patterns = [
+                        { selector: 'video source', attr: 'src' },
+                        { selector: '[data-webm]', attr: 'data-webm' },
+                        { selector: 'video', attr: 'src' },
+                        { selector: 'a[href$=".mp4"], a[href$=".webm"], a[href$=".ogg"]', attr: 'href' }
+                    ];
+                    for (const { selector, attr } of patterns) {
+                        const element = doc.querySelector(selector);
+                        if (element) {
+                            let url = element.getAttribute(attr);
+                            if (url && !url.startsWith('http')) {
+                                const base = link.substring(0, link.lastIndexOf('/') + 1);
+                                url = base + url;
+                            }
+                            return url;
+                        }
+                    }
+                    return '';
+                })
+                .catch(() => '');
+        }
+
+        function displayVideos(videos) {
+            const gallery = document.getElementById('gallery');
+            gallery.innerHTML = '';
+            videos.forEach(video => {
+                const videoCard = document.createElement('div');
+                videoCard.className = 'video-card';
+                videoCard.innerHTML = video.videoUrl
+                    ? `
+                        <h3>${video.title}</h3>
+                        <video controls poster="${video.thumbnail}">
+                            <source src="${video.videoUrl}" type="video/mp4">
+                            Your browser does not support the video tag.
+                        </video>
+                        <p class="debug">Video URL: ${video.videoUrl}</p>
+                    `
+                    : `
+                        <h3>${video.title}</h3>
+                        <p class="error">No video found</p>
+                        <p><a href="${video.link}" target="_blank">View original page</a></p>
+                        <p class="debug">Link: ${video.link}</p>
+                    `;
+                gallery.appendChild(videoCard);
+            });
+        }
+    </script>
+</body>
+</html>
